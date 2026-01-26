@@ -85,8 +85,23 @@ We introduce a new benchmark to rigorously evaluate geometry prediction models o
 
 ### 📦 Installation
 
+#### Using Pixi (Recommended)
+This project supports [Pixi](https://pixi.sh) for environment management, which handles both Conda and PyPI dependencies automatically.
+
 ```bash
-pip install xformers torch\>=2 torchvision
+# Initialize environment and install dependencies
+pixi install
+
+# Run the CLI
+pixi run da3 --help
+```
+
+> [!NOTE]
+> For GPU support, the `pixi.toml` is configured to use `conda-forge`'s `pytorch` with CUDA. If `pixi` fails to detect your GPU, ensure you have the appropriate drivers installed.
+
+#### Using Pip
+```bash
+pip install xformers torch>=2 torchvision
 pip install -e . # Basic
 pip install --no-build-isolation git+https://github.com/nerfstudio-project/gsplat.git@0b4dddf04cb687367602c01196913cde6a743d70 # for gaussian head
 pip install -e ".[app]" # Gradio, python>=3.10
@@ -94,6 +109,7 @@ pip install -e ".[all]" # ALL
 ```
 
 For detailed model information, please refer to the [Model Cards](#-model-cards) section below.
+
 
 ### 💻 Basic Usage
 
