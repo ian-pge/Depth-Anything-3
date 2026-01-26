@@ -108,6 +108,28 @@ pip install -e ".[app]" # Gradio, python>=3.10
 pip install -e ".[all]" # ALL
 ```
 
+### 🚀 Running the models
+
+#### Basic Usage (Pose & Depth)
+```bash
+# Process a directory of images
+pixi run da3 images /path/to/images --export-dir /path/to/results --model-dir depth-anything/DA3NESTED-GIANT-LARGE
+```
+
+#### Memory-Efficient Streaming Inference (Video/Large Scenes)
+For processing long sequences or large scenes with limited VRAM (e.g., < 24GB for the Giant model), use the streaming pipeline.
+
+```bash
+# 1. Download required weights (SALAD & DA3-Giant)
+pixi run da3-weights
+
+# 2. Run streaming inference
+pixi run da3-streaming --image_dir /path/to/images --output_dir /path/to/results --config configs/base_config.yaml
+```
+
+> [!TIP]
+> The streaming method uses a sliding window approach to maintain a constant memory footprint, allowing `DA3-Giant` to run on consumer hardware.
+
 For detailed model information, please refer to the [Model Cards](#-model-cards) section below.
 
 

@@ -11,6 +11,8 @@ scripts = ["build_env.sh"]
 
 [tasks]
 da3 = "PYTHONPATH=src PYTORCH_ALLOC_CONF=expandable_segments:True python -m depth_anything_3.cli"
+da3-streaming = "cd da3_streaming && PYTHONPATH=../src:. PYTORCH_ALLOC_CONF=expandable_segments:True python da3_streaming.py"
+da3-weights = "cd da3_streaming && bash ./scripts/download_weights.sh"
 
 [system-requirements]
 cuda = "12.4"
@@ -42,11 +44,18 @@ xformers = "*"
 cuda-nvcc = "*"
 cxx-compiler = "*"
 ninja = "*" 
-addict = "*" 
+addict = "*"
+faiss-gpu = "*"
+pandas = "*"
+prettytable = "*"
+numba = "*"
+scikit-learn = "*"
+matplotlib = "*"
 
 [pypi-dependencies]
 
 pillow-heif = "*"
 evo = "*"
+pypose = "*"
 
 
