@@ -31,8 +31,8 @@ def download_weights():
             os.makedirs(salad_dir)
         subprocess.check_call(["curl", "-L", "https://github.com/serizba/salad/releases/download/v1.0.0/dino_salad.ckpt", "-o", salad_file])
 
-def create_config(chunk_size, overlap):
-    """Creates a temporary config file with specified chunk settings."""
+def create_config(chunk_size, overlap, loop_enable=True, align_method='sim3', depth_threshold=15.0):
+    """Creates a temporary config file with specified settings."""
     # Load base config
     base_config_path = "da3_streaming/configs/base_config.yaml"
     with open(base_config_path, 'r') as f:
@@ -41,30 +41,9 @@ def create_config(chunk_size, overlap):
     # Update values
     config['Model']['chunk_size'] = chunk_size
     config['Model']['overlap'] = overlap
-    
-    # Ensure paths are correct relative to workspace root where we run this
-    # The original config had relative paths like './weights_large/...'. 
-    # If we run from root, these are fine if they point to da3_streaming/weights...
-    # Wait, the config inside da3_streaming/configs typically expects to run from da3_streaming dir?
-    # No, we ran it from root with `python da3_streaming.py ...`. 
-    # Let's ensure the paths point to the right place.
-    # Our previous successful run used `DA3: './weights_large/model.safetensors'`
-    # We downloaded weights to `da3_streaming/weights_large`.
-    # So the path in config should be `da3_streaming/weights_large/...` if running from root?
-    # Or `./weights_large` if running from `da3_streaming`?
-    # The previous run command was: `pixi run da3-streaming ...` and we were in `/workspace`.
-    # The config had `./weights_large/...`. 
-    # If `da3-streaming` task does `cd da3_streaming && ...`, then `./weights_large` refers to `da3_streaming/weights_large`.
-    # Let's check `pixi.toml` again.
-    # `da3-streaming = "cd da3_streaming && ..."`
-    # So yes, paths are relative to `da3_streaming/`.
-    
-    # We will likely want to run this pipeline script from root.
-    # So we should invoke the python script directly or use the pixi task?
-    # If we use the python script directly, we should respect the paths.
-    
-    # Let's write the temp config to `da3_streaming/configs/temp_config.yaml` 
-    # so it's siblings with base_config.
+    config['Model']['loop_enable'] = loop_enable
+    config['Model']['align_method'] = align_method
+    config['Model']['depth_threshold'] = depth_threshold
     
     output_path = "da3_streaming/configs/temp_config.yaml"
     with open(output_path, 'w') as f:
@@ -78,14 +57,18 @@ def main():
     parser.add_argument("--output_dir", required=True, help="Path to output directory")
     parser.add_argument("--chunk_size", type=int, default=20, help="Chunk size for streaming (default: 20)")
     parser.add_argument("--overlap", type=int, default=10, help="Overlap between chunks (default: 10)")
+    parser.add_argument("--no_loop", action="store_false", dest="loop_enable", help="Disable loop closure detection")
+    parser.add_argument("--align_method", choices=['sim3', 'se3', 'scale+se3'], default='sim3', help="Alignment method (default: sim3)")
+    parser.add_argument("--depth_threshold", type=float, default=15.0, help="Depth threshold for alignment (default: 15.0)")
+    parser.set_defaults(loop_enable=True)
     
     args = parser.parse_args()
     
     print("Step 1: Checking Weights...")
     download_weights()
     
-    print(f"Step 2: Creating Config (Chunk: {args.chunk_size}, Overlap: {args.overlap})...")
-    config_path = create_config(args.chunk_size, args.overlap)
+    print(f"Step 2: Creating Config (Chunk: {args.chunk_size}, Overlap: {args.overlap}, Loop: {args.loop_enable})...")
+    config_path = create_config(args.chunk_size, args.overlap, args.loop_enable, args.align_method, args.depth_threshold)
     
     print("Step 3: Running Streaming pipeline...")
     # adapting command:
