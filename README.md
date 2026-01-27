@@ -110,6 +110,22 @@ pip install -e ".[all]" # ALL
 
 ### 🚀 Running the models
 
+#### Pose Extraction (Automated Pipeline)
+To extract camera poses from a video sequence or image directory, use the automated pipeline:
+
+```bash
+# Basic usage
+pixi run pose-extract --image_dir /path/to/images --output_dir /path/to/results
+
+# Configure chunk size (smaller is better for low VRAM)
+pixi run pose-extract --image_dir /path/to/images --output_dir /path/to/results --chunk_size 10 --overlap 5
+```
+
+This command will:
+1.  Automatically download required weights (`DA3-LARGE`).
+2.  Run the streaming pipeline which aligns chunks and closes loops.
+3.  Export a `.glb` file for easy visualization.
+
 #### Basic Usage (Pose & Depth)
 ```bash
 # Process a directory of images
