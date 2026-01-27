@@ -33,6 +33,7 @@ pixi run pose-extract --image_dir /path/to/images --output_dir /path/to/results
 | `--chunk_size` | Number of images per segment. Smaller values reduce VRAM usage. | `20` |
 | `--overlap` | Number of overlapping images between segments. | `10` |
 | `--no_loop` | Disable global loop closure detection. | Loop Enabled |
+| `--loop_chunk_size` | VRAM limit for loop alignment. Reduce if OOM occurs at the end. | `10` |
 | `--align_method` | Method for chunk alignment (`sim3`, `se3`, or `scale+se3`). | `sim3` |
 | `--depth_threshold` | Maximum depth value used for alignment (meters). | `15.0` |
 
