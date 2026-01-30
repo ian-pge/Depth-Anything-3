@@ -31,31 +31,41 @@ def export_to_colmap(
     image_paths: list[str],
     conf_thresh_percentile: float = 40.0,
     process_res_method: str = "upper_bound_resize",
+    skip_points: bool = False,
 ) -> None:
     # 1. Data preparation
     conf_thresh = np.percentile(prediction.conf, conf_thresh_percentile)
-    points, colors = _depths_to_world_points_with_colors(
-        prediction.depth,
-        prediction.intrinsics,
-        prediction.extrinsics,  # w2c
-        prediction.processed_images,
-        prediction.conf,
-        conf_thresh,
-    )
-    num_points = len(points)
-    logger.info(f"Exporting to COLMAP with {num_points} points")
+    
     num_frames = len(prediction.processed_images)
     h, w = prediction.processed_images.shape[1:3]
-    points_xyf = _create_xyf(num_frames, h, w)
-    points_xyf = points_xyf[prediction.conf >= conf_thresh]
+
+    if not skip_points:
+        points, colors = _depths_to_world_points_with_colors(
+            prediction.depth,
+            prediction.intrinsics,
+            prediction.extrinsics,  # w2c
+            prediction.processed_images,
+            prediction.conf,
+            conf_thresh,
+        )
+        num_points = len(points)
+        logger.info(f"Exporting to COLMAP with {num_points} points")
+        
+        points_xyf = _create_xyf(num_frames, h, w)
+        points_xyf = points_xyf[prediction.conf >= conf_thresh]
+    else:
+        logger.info(f"Exporting to COLMAP (Points Skipped)")
+        # No points, no xyf needed
 
     # 2. Set Reconstruction
     reconstruction = pycolmap.Reconstruction()
 
     point3d_ids = []
-    for vidx in range(num_points):
-        point3d_id = reconstruction.add_point3D(points[vidx], pycolmap.Track(), colors[vidx])
-        point3d_ids.append(point3d_id)
+    point3d_ids = []
+    if not skip_points:
+        for vidx in range(num_points):
+            point3d_id = reconstruction.add_point3D(points[vidx], pycolmap.Track(), colors[vidx])
+            point3d_ids.append(point3d_id)
 
     for fidx in range(num_frames):
         orig_w, orig_h = Image.open(image_paths[fidx]).size
@@ -106,16 +116,17 @@ def export_to_colmap(
 
         # set point2d and update track
         point2d_list = []
-        points_in_frame = points_xyf[:, 2].astype(np.int32) == fidx
-        for vidx in np.where(points_in_frame)[0]:
-            point2d = points_xyf[vidx][:2]
-            point2d[0] *= orig_w / w
-            point2d[1] *= orig_h / h
-            point3d_id = point3d_ids[vidx]
-            point2d_list.append(pycolmap.Point2D(point2d, point3d_id))
-            reconstruction.point3D(point3d_id).track.add_element(
-                image.image_id, len(point2d_list) - 1
-            )
+        if not skip_points:
+            points_in_frame = points_xyf[:, 2].astype(np.int32) == fidx
+            for vidx in np.where(points_in_frame)[0]:
+                point2d = points_xyf[vidx][:2]
+                point2d[0] *= orig_w / w
+                point2d[1] *= orig_h / h
+                point3d_id = point3d_ids[vidx]
+                point2d_list.append(pycolmap.Point2D(point2d, point3d_id))
+                reconstruction.point3D(point3d_id).track.add_element(
+                    image.image_id, len(point2d_list) - 1
+                )
 
         # set and add image
         image.frame_id = image.image_id

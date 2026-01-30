@@ -1,0 +1,44 @@
+Loop:
+  SALAD:
+    batch_size: 32
+    image_size:
+    - 336
+    - 336
+    nms_threshold: 25
+    similarity_threshold: 0.85
+    top_k: 5
+    use_nms: true
+  SIM3_Optimizer:
+    lambda_init: 1e-6
+    lang_version: cpp
+    max_iterations: 30
+Model:
+  IRLS:
+    delta: 0.1
+    max_iters: 5
+    tol: 1e-9
+  Pointcloud_Save:
+    conf_threshold_coef: 0.75
+    sample_ratio: 0.015
+  Sparse_Align:
+    keypoint_num: 5000
+    keypoint_select: orb
+  align_lib: triton
+  align_method: sim3
+  align_type: dense
+  chunk_size: 400
+  delete_temp_files: true
+  depth_threshold: 15.0
+  loop_chunk_size: 10
+  loop_enable: false
+  overlap: 200
+  ref_view_strategy: saddle_balanced
+  ref_view_strategy_loop: saddle_balanced
+  save_debug_info: false
+  save_depth_conf_result: true
+  scale_compute_method: auto
+  useDBoW: false
+Weights:
+  DA3: ./weights_large/model.safetensors
+  DA3_CONFIG: ./weights_large/config.json
+  SALAD: ./weights/dino_salad.ckpt

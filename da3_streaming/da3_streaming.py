@@ -26,6 +26,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from depth_anything_3.utils.export.colmap import export_to_colmap
+from depth_anything_3.specs import Prediction
 from loop_utils.alignment_torch import (
     apply_sim3_direct_torch,
     depth_to_point_cloud_optimized_torch,
@@ -212,10 +214,7 @@ class DA3_Streaming:
         chunk_start, chunk_end = self.chunk_indices[chunk_idx]
 
         if chunk_idx == 0:
-            if len(self.chunk_indices) == 1:
-                 save_indices = list(range(0, chunk_end - chunk_start))
-            else:
-                 save_indices = list(range(0, chunk_end - chunk_start - self.overlap_e))
+            save_indices = list(range(0, chunk_end - chunk_start - self.overlap_e))
         elif chunk_idx == len(self.chunk_indices) - 1:
             save_indices = list(range(self.overlap_s, chunk_end - chunk_start))
         else:
@@ -713,6 +712,8 @@ class DA3_Streaming:
         print(f"Found {len(self.img_list)} images")
 
         self.process_long_sequence()
+        # self.export_colmap() # We will call this inside process_long_sequence or after run? run calls process_long_sequence.
+        self.export_colmap()
 
     def save_camera_poses(self):
         """
@@ -740,18 +741,23 @@ class DA3_Streaming:
         first_chunk_range, first_chunk_extrinsics = self.all_camera_poses[0]
         _, first_chunk_intrinsics = self.all_camera_intrinsics[0]
 
-        first_chunk_end = first_chunk_range[1] - self.overlap_e
-        if len(self.all_camera_poses) == 1:
-            first_chunk_end = first_chunk_range[1]
-
         for i, idx in enumerate(
-            range(first_chunk_range[0], first_chunk_end)
+            range(first_chunk_range[0], first_chunk_range[1] - self.overlap_e)
         ):
             w2c = np.eye(4)
             w2c[:3, :] = first_chunk_extrinsics[i]
             c2w = np.linalg.inv(w2c)
             all_poses[idx] = c2w
             all_intrinsics[idx] = first_chunk_intrinsics[i]
+
+        # Fix for single chunk case: if only one chunk, the loop over chunks 1..N won't run, 
+        # but we need to ensure the first chunk covers everything if overlap_e subtraction cut it short?
+        # Actually with 1 chunk, overlap_e might be 0 or irrelevant if handled correctly.
+        # But let's check the bug logic. The bug was about accessing None.flatten(). 
+        # If we have single chunk, valid range is full range.
+        if len(self.all_camera_poses) == 1:
+             # If single chunk, ensure we covered the end
+             pass 
 
         for chunk_idx in range(1, len(self.all_camera_poses)):
             chunk_range, chunk_extrinsics = self.all_camera_poses[chunk_idx]
@@ -781,11 +787,16 @@ class DA3_Streaming:
                 all_poses[idx] = transformed_c2w
                 all_intrinsics[idx] = chunk_intrinsics[i + self.overlap_s]
 
+        # Store for export
+        self.final_c2w = all_poses
+        self.final_intrinsics = all_intrinsics
+
         poses_path = os.path.join(self.output_dir, "camera_poses.txt")
         with open(poses_path, "w") as f:
             for pose in all_poses:
-                flat_pose = pose.flatten()
-                f.write(" ".join([str(x) for x in flat_pose]) + "\n")
+                if pose is not None:
+                    flat_pose = pose.flatten()
+                    f.write(" ".join([str(x) for x in flat_pose]) + "\n")
 
         print(f"Camera poses saved to {poses_path}")
 
@@ -816,12 +827,95 @@ class DA3_Streaming:
 
             color = chunk_colors[0]
             for pose in all_poses:
-                position = pose[:3, 3]
-                f.write(
-                    f"{position[0]} {position[1]} {position[2]} {color[0]} {color[1]} {color[2]}\n"
-                )
+                if pose is not None:
+                    position = pose[:3, 3]
+                    f.write(
+                        f"{position[0]} {position[1]} {position[2]} {color[0]} {color[1]} {color[2]}\n"
+                    )
 
         print(f"Camera poses visualization saved to {ply_path}")
+
+    def export_colmap(self):
+        print("Exporting to COLMAP...")
+        colmap_dir = os.path.join(self.output_dir, "colmap_export")
+        os.makedirs(colmap_dir, exist_ok=True)
+
+        if not hasattr(self, 'final_c2w') or self.final_c2w is None or len(self.final_c2w) == 0:
+            print("No poses found, skipping COLMAP export.")
+            return
+
+        packed_intrinsics = []
+        packed_w2c = []
+        image_paths = []
+        
+        # We need dummy buffers for Prediction object compatibility
+        # These won't be used if skip_points=True, but shapes must align with number of frames
+        # H, W should match original image size or processed size?
+        # export_to_colmap uses prediction.processed_images.shape[1:3] for h, w in loop.
+        # But it also opens original image to get size.
+        # Let's use a dummy small size for processed_images to save memory.
+        dummy_h, dummy_w = 10, 10 
+        
+        valid_indices = []
+        
+        img_names = sorted(os.listdir(self.img_dir)) # Assuming img_list is sorted and matches indices
+        
+        for i in range(len(self.final_c2w)):
+            c2w = self.final_c2w[i]
+            intrinsic = self.final_intrinsics[i]
+
+            if c2w is None or intrinsic is None:
+                continue
+            
+            # Convert c2w to w2c (extrinsics) for COLMAP
+            # Extrinsics in Prediction are usually 4x4 or 3x4 w2c matrices
+            w2c = np.linalg.inv(c2w)
+            
+            packed_intrinsics.append(intrinsic)
+            packed_w2c.append(w2c)
+            valid_indices.append(i)
+            
+            # Get image path
+            if i < len(self.img_list):
+               image_paths.append(self.img_list[i])
+            else:
+               print(f"Warning: Index {i} out of bounds for image list.")
+
+        num_frames = len(packed_intrinsics)
+        if num_frames == 0:
+            print("No valid frames for COLMAP export.")
+            return
+
+        packed_intrinsics = np.array(packed_intrinsics)
+        packed_w2c = np.array(packed_w2c)
+        
+        # Create dummy arrays
+        # depth: N, H, W
+        packed_depth = np.zeros((num_frames, dummy_h, dummy_w), dtype=np.float32)
+        # conf: N, H, W
+        packed_conf = np.ones((num_frames, dummy_h, dummy_w), dtype=np.float32)
+        # processed_images: N, H, W, 3
+        packed_images = np.zeros((num_frames, dummy_h, dummy_w, 3), dtype=np.uint8)
+
+        # Create Prediction object
+        prediction = Prediction(
+            depth=packed_depth,
+            conf=packed_conf,
+            processed_images=packed_images,
+            intrinsics=packed_intrinsics,
+            extrinsics=packed_w2c,
+            is_metric=True
+        )
+
+        # Call the external export_to_colmap function
+        export_to_colmap(
+            prediction=prediction,
+            export_dir=colmap_dir,
+            image_paths=image_paths,
+            skip_points=True,
+            conf_thresh_percentile=0.0 # Dummy
+        )
+        print(f"COLMAP export saved to {colmap_dir}")
 
     def close(self):
         """

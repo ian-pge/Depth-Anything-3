@@ -128,13 +128,16 @@ def main():
     env["PYTHONPATH"] = "../src:."
     env["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
     
+    # Create a wrapper script to patch DA3_Streaming -> REMOVED
+    # We now use the patched da3_streaming.py directly
+    
     # Command Construction
     rel_image_dir = os.path.abspath(actual_input_dir)
     rel_output_dir = os.path.abspath(args.output_dir)
     rel_config_path = f"configs/{os.path.basename(config_path)}"
     
     streaming_cmd = [
-        "python", "-u", "da3_streaming.py", # -u for unbuffered output
+        "python", "-u", "da3_streaming.py", # Run original script directly
         "--image_dir", rel_image_dir,
         "--output_dir", rel_output_dir,
         "--config", rel_config_path
