@@ -212,7 +212,10 @@ class DA3_Streaming:
         chunk_start, chunk_end = self.chunk_indices[chunk_idx]
 
         if chunk_idx == 0:
-            save_indices = list(range(0, chunk_end - chunk_start - self.overlap_e))
+            if len(self.chunk_indices) == 1:
+                 save_indices = list(range(0, chunk_end - chunk_start))
+            else:
+                 save_indices = list(range(0, chunk_end - chunk_start - self.overlap_e))
         elif chunk_idx == len(self.chunk_indices) - 1:
             save_indices = list(range(self.overlap_s, chunk_end - chunk_start))
         else:
@@ -737,8 +740,12 @@ class DA3_Streaming:
         first_chunk_range, first_chunk_extrinsics = self.all_camera_poses[0]
         _, first_chunk_intrinsics = self.all_camera_intrinsics[0]
 
+        first_chunk_end = first_chunk_range[1] - self.overlap_e
+        if len(self.all_camera_poses) == 1:
+            first_chunk_end = first_chunk_range[1]
+
         for i, idx in enumerate(
-            range(first_chunk_range[0], first_chunk_range[1] - self.overlap_e)
+            range(first_chunk_range[0], first_chunk_end)
         ):
             w2c = np.eye(4)
             w2c[:3, :] = first_chunk_extrinsics[i]
